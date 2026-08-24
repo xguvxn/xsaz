@@ -41,7 +41,11 @@ Nearly complete. Remaining conversion item: **Seller Live Stream / WebRTC page**
 - P2: Fix seed image 404s (storage/auctions/*.jpg).
 - P3: (Opsiyonel) Chat'i production'da Reverb push'a yükselt (şu an polling).
 
-## Live streaming (2026-08, this session) — DONE
+## Live streaming UX pass (2026-08, this session)
+- Bug #1 (yayın başlatılamıyor): goLive izin yönetimi sağlamlaştırıldı — güvenli bağlam + kamera/mik izni ön kontrolü, net Türkçe hatalar. Gerçek sebep çoğunlukla önizleme iframe'inde kamera izni; yeni sekmede/production'da çalışır.
+- #2 Satıcı yayın sayfası: "Kamerayı Önizle" (yayına başlamadan kontrol) + "İzleyici Linki" kopyala + daha net durum/overlay.
+- #3 İzleyici canlı paneli: video altına SATICI ŞERİDİ (avatar, ad, puan, "Profil" + "Satıcıya Sor") — mobilde de görünür; "Satıcıya Sor" chat'e kaydırır.
+- Doğrulama: testing agent %100 (iteration_8, 15/15). İlan aktif bırakıldı.
 - LiveKit Cloud (WebRTC SFU) entegre: `LiveKitTokenController` + `POST /livekit/token`, `config/services.php`.
 - `resources/js/composables/useLiveKit.js` (token + connect/subscribe).
 - `Seller/Broadcast.vue` (kamera/mik aç-kapa, Yayını Başlat/Bitir, teklifler+satış, canlı chat) — Blade→Vue dönüşümü tamam.

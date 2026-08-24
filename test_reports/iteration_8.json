@@ -1,0 +1,43 @@
+{
+  "summary": "Frontend-only e2e test of Broadcast (preview/copy-link/go-live), Viewer seller strip (desktop+mobile), LiveKit video, real-time chat, and homepage->detail scroll regression. ALL 15 assertions passed. Auction 'antika-masa-saati-ve-vazo-seti-ZcBz' left active (no 'Sat' clicked).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Viewer /auctions/{slug}", "issues": ["Mobile seller strip is rendered but off-screen at y=-290 relative to 390x844 viewport initial position — visually reachable only after scroll. offsetWidth/offsetHeight are >0 (372x113) so functional per spec, but consider a sticky/upper placement on mobile so it's immediately visible near the live video."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Broadcast.vue camera permission hardening + preview button work correctly; getUserMedia returns a live track (readyState=4, 640x480).",
+    "LiveKit publisher/subscriber path works end-to-end in preview: viewer #liveVideo shows 1280x720, not paused.",
+    "Polling chat viewer -> seller delivered within 5s window (verified TESTMSG_ appeared on broadcast-chat-messages).",
+    "Consider making the mobile stream-seller-strip either sticky above the video or duplicated near the top of the page — currently it sits below the fold on the 390x844 viewport initial view."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100% (15/15)"},
+  "test_credentials": "seller@test.com/password, buyer@test.com/password",
+  "seed_data_creation": "None. Auction slug 'antika-masa-saati-ve-vazo-seti-ZcBz' kept active (no sale performed).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "LiveKit works with fake media + granted camera/microphone permissions on the preview origin. Login inputs are id=email (type=text) and id=password (type=password); do NOT rely on input[type=email]. Seller must Go Live before opening viewer page. Broadcast test-ids verified: seller-broadcast-page, broadcast-preview, broadcast-copy-link, broadcast-go-live, broadcast-live-badge, broadcast-error, broadcast-end, broadcast-toggle-cam, broadcast-toggle-mic, broadcast-chat-messages. Viewer test-ids verified: stream-seller-strip, stream-view-profile, stream-ask-seller, viewer-chat-input, viewer-chat-send, #liveVideo. Regression: document.body & documentElement scrollTop both 0 after clicking auction card from scrolled homepage.",
+  "detailed_results": {
+    "broadcast_page_renders": true,
+    "preview_video": {"found": true, "readyState": 4, "hasSrc": true, "vw": 640, "vh": 480},
+    "no_live_badge_after_preview": true,
+    "copy_link_toggles_to_Kopyalandı": true,
+    "went_live_within_10s": true,
+    "broadcast_error_text": "",
+    "controls_present_end_cam_mic": true,
+    "strip_desktop_visible_1920x800": true,
+    "profile_link_present": true,
+    "ask_seller_button_present": true,
+    "live_video_playing": {"readyState": 4, "videoWidth": 1280, "videoHeight": 720, "paused": false},
+    "ask_seller_scrolls_and_focuses_chat_input": true,
+    "strip_mobile_dimensions_390x844": {"width": 372, "height": 113, "y": -290.65, "note": "offsetWidth/Height>0 (passes spec); however initially above the fold on mobile"},
+    "chat_delivery_viewer_to_seller_within_5s": true,
+    "regression_detail_opens_at_top": true
+  }
+}

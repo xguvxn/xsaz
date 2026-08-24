@@ -17,6 +17,16 @@ function messageSeller() {
     router.post(props.config.messages_start_url, { user_id: props.a.seller.id });
 }
 
+function scrollToChat() {
+    // Canlı sekmesindeki sohbete yumuşak kaydır ve inputa odaklan
+    try { window.switchTab && window.switchTab('stream'); } catch (e) {}
+    const el = document.getElementById('chatInput') || document.querySelector('[data-testid="viewer-chat-messages"]');
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => { try { document.getElementById('chatInput')?.focus(); } catch (e) {} }, 350);
+    }
+}
+
 function loadScript(src) {
     return new Promise((resolve) => {
         const s = document.createElement('script');
@@ -58,7 +68,7 @@ async function connectViewerStream() {
         lkRoom = await connectRoom({
             auctionSlug: props.a.slug,
             role: 'viewer',
-            csrf: (window.__page_csrf || document.querySelector('meta[name="csrf-token"]')?.content || ''),
+            csrf: (props.config?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || ''),
             videoEl,
             onStatus: (s) => {
                 if (s === 'connected') {
@@ -201,6 +211,28 @@ onUnmounted(() => {
                             </div>
                         </div>
                     </template>
+
+                    <!-- SATICI ŞERİDİ (mobilde de görünür) -->
+                    <div class="stream-seller-strip" data-testid="stream-seller-strip">
+                        <Link :href="a.seller.profile_url" class="sss-ava-link">
+                            <img class="sss-ava" :src="a.seller.profile_img" :alt="a.seller.name">
+                        </Link>
+                        <div class="sss-meta">
+                            <Link :href="a.seller.profile_url" class="sss-name">{{ a.seller.name }}</Link>
+                            <div class="sss-rating">
+                                <i class="bi bi-star-fill"></i> {{ a.seller.rating_fmt }}
+                                <span class="sss-cnt">({{ a.seller.review_count }})</span>
+                            </div>
+                        </div>
+                        <div class="sss-actions">
+                            <Link :href="a.seller.profile_url" class="sss-btn sss-btn-ghost" data-testid="stream-view-profile">
+                                <i class="bi bi-person"></i><span class="sss-btn-lbl">Profil</span>
+                            </Link>
+                            <button type="button" class="sss-btn sss-btn-primary" @click="scrollToChat" data-testid="stream-ask-seller">
+                                <i class="bi bi-chat-dots"></i><span class="sss-btn-lbl">Satıcıya Sor</span>
+                            </button>
+                        </div>
+                    </div>
 
                     <!-- CANLI SOHBET -->
                     <div class="au-card mt-3" data-testid="viewer-chat-card" style="margin-top:16px;">
@@ -451,3 +483,35 @@ onUnmounted(() => {
              :data-current-min="config.current_min"></div>
     </div>
 </template>
+
+
+<style scoped>
+/* Canlı yayın paneli — satıcı şeridi (mobil dahil görünür) */
+.stream-seller-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--card, #12121a);
+}
+.sss-ava-link { flex: 0 0 auto; }
+.sss-ava { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); }
+.sss-meta { flex: 1; min-width: 0; }
+.sss-name { display: block; font-weight: 700; font-size: 14px; color: var(--text); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sss-name:hover { color: var(--primary); }
+.sss-rating { font-size: 12px; color: #fbbf24; display: flex; align-items: center; gap: 4px; }
+.sss-cnt { color: var(--muted); }
+.sss-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.sss-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; text-decoration: none; border: 1px solid var(--border); cursor: pointer; min-height: 40px; }
+.sss-btn-ghost { background: transparent; color: var(--text); }
+.sss-btn-ghost:hover { background: rgba(128,128,128,.12); }
+.sss-btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.sss-btn-primary:hover { filter: brightness(1.08); }
+
+@media (max-width: 560px) {
+    .stream-seller-strip { flex-wrap: wrap; }
+    .sss-actions { width: 100%; }
+    .sss-btn { flex: 1; justify-content: center; }
+}
+</style>

@@ -27,12 +27,70 @@ const viewers = ref(0);
 const bidList = ref([...(props.bids || [])]);
 
 let room = null;
+let previewStream = null;
+
+function stopPreview() {
+    if (previewStream) { previewStream.getTracks().forEach((t) => t.stop()); previewStream = null; }
+    if (videoEl.value) videoEl.value.srcObject = null;
+}
+
+async function previewCamera() {
+    if (status.value === 'live' || status.value === 'connecting') return;
+    errorMsg.value = '';
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        errorMsg.value = 'Kamera önizlemesi için güvenli bağlam (HTTPS) gerekli veya bu sekmede izin engelli. Yeni sekmede aç.';
+        return;
+    }
+    try {
+        previewStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (videoEl.value) { videoEl.value.srcObject = previewStream; videoEl.value.muted = true; }
+        status.value = 'preview';
+    } catch (e) {
+        errorMsg.value = e.name === 'NotAllowedError'
+            ? 'Kamera izni reddedildi. Adres çubuğundaki kamera simgesinden izin ver.'
+            : 'Kamera önizlemesi açılamadı.';
+    }
+}
+
+const copied = ref(false);
+async function copyViewerLink() {
+    const url = new URL(props.routes.view_public, window.location.origin).href;
+    try {
+        await navigator.clipboard.writeText(url);
+        copied.value = true; setTimeout(() => { copied.value = false; }, 1800);
+    } catch (e) {
+        window.prompt('İzleyici linki:', url);
+    }
+}
 
 async function goLive() {
     if (status.value === 'connecting' || status.value === 'live') return;
     errorMsg.value = '';
+
+    // Ön kontrol: güvenli bağlam + medya API'si (önizleme iframe'inde kamera engelli olabilir)
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        errorMsg.value = 'Kamera erişimi için güvenli bağlam (HTTPS) gerekli veya bu sekmede izin engelli. Uygulamayı yeni bir sekmede açıp tekrar dene.';
+        status.value = 'error';
+        return;
+    }
+
     status.value = 'connecting';
     try {
+        stopPreview();
+        // Önce kamera+mikrofon iznini net şekilde iste (hata mesajını netleştirir)
+        try {
+            const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            probe.getTracks().forEach((t) => t.stop());
+        } catch (permErr) {
+            if (permErr.name === 'NotAllowedError' || permErr.name === 'SecurityError') {
+                throw Object.assign(new Error('Kamera/mikrofon izni reddedildi. Tarayıcı adres çubuğundaki kamera simgesine tıklayıp "İzin ver" de ve tekrar dene.'), { handled: true });
+            }
+            if (permErr.name === 'NotFoundError' || permErr.name === 'OverconstrainedError') {
+                throw Object.assign(new Error('Bu cihazda kamera/mikrofon bulunamadı. Bir kamera bağlı olduğundan emin ol.'), { handled: true });
+            }
+            throw Object.assign(new Error('Kamera/mikrofon açılamadı: ' + (permErr.message || permErr.name)), { handled: true });
+        }
+
         const { server_url, participant_token } = await fetchLiveKitToken({
             auctionSlug: props.auction.slug, role: 'broadcaster', csrf: csrf(),
         });
@@ -42,7 +100,7 @@ async function goLive() {
         room.on('disconnected', () => { status.value = 'idle'; });
 
         await room.connect(server_url, participant_token);
-        // Kamera + mikrofon aç (tarayıcı izin ister)
+        // Kamera + mikrofon aç
         await room.localParticipant.setCameraEnabled(true);
         await room.localParticipant.setMicrophoneEnabled(true);
         camOn.value = true; micOn.value = true;
@@ -61,7 +119,7 @@ async function goLive() {
         if (e.code === 'not_configured') {
             errorMsg.value = 'Canlı yayın altyapısı (LiveKit) henüz yapılandırılmadı. Yönetici .env içine LIVEKIT_* anahtarlarını eklemeli.';
         } else {
-            errorMsg.value = e.message || 'Yayın başlatılamadı. Kamera/mikrofon iznini kontrol et.';
+            errorMsg.value = e.handled ? e.message : (e.message || 'Yayın başlatılamadı. Kamera/mikrofon iznini kontrol et.');
         }
         status.value = 'error';
         await stopRoom(false);
@@ -174,6 +232,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     if (chatTimer) clearInterval(chatTimer);
+    stopPreview();
     stopRoom(false);
 });
 </script>
@@ -202,20 +261,33 @@ onBeforeUnmount(() => {
             <div class="bc-main">
                 <div class="bc-video-wrap">
                     <video ref="videoEl" class="bc-video" autoplay playsinline muted data-testid="broadcast-video"></video>
-                    <div v-if="status !== 'live'" class="bc-video-overlay">
+                    <div v-if="status !== 'live' && status !== 'preview'" class="bc-video-overlay">
                         <i class="bi bi-camera-video-off"></i>
                         <p v-if="status === 'connecting'">Bağlanıyor…</p>
-                        <p v-else>Yayın kapalı</p>
+                        <template v-else>
+                            <p class="bc-ov-title">Yayına hazır mısın?</p>
+                            <p class="bc-ov-hint">Önce "Kamerayı Önizle" ile kendini kontrol et, sonra "Yayını Başlat"a bas.</p>
+                        </template>
                     </div>
+                    <span v-if="status === 'preview'" class="bc-preview-tag"><i class="bi bi-eye"></i> Önizleme (yayında değil)</span>
                 </div>
 
                 <p v-if="errorMsg" class="bc-error" data-testid="broadcast-error">{{ errorMsg }}</p>
 
                 <div class="bc-controls">
-                    <button v-if="status !== 'live'" class="bc-btn bc-btn-primary" @click="goLive"
-                            :disabled="status === 'connecting'" data-testid="broadcast-go-live">
-                        <i class="bi bi-broadcast"></i> {{ status === 'connecting' ? 'Bağlanıyor…' : 'Yayını Başlat' }}
-                    </button>
+                    <template v-if="status !== 'live'">
+                        <button class="bc-btn bc-btn-ghost2" @click="previewCamera"
+                                :disabled="status === 'connecting'" data-testid="broadcast-preview">
+                            <i class="bi bi-camera-video"></i> Kamerayı Önizle
+                        </button>
+                        <button class="bc-btn bc-btn-primary" @click="goLive"
+                                :disabled="status === 'connecting'" data-testid="broadcast-go-live">
+                            <i class="bi bi-broadcast"></i> {{ status === 'connecting' ? 'Bağlanıyor…' : 'Yayını Başlat' }}
+                        </button>
+                        <button class="bc-btn bc-btn-ghost2" @click="copyViewerLink" data-testid="broadcast-copy-link">
+                            <i class="bi" :class="copied ? 'bi-check2' : 'bi-link-45deg'"></i> {{ copied ? 'Kopyalandı!' : 'İzleyici Linki' }}
+                        </button>
+                    </template>
                     <template v-else>
                         <button class="bc-btn" :class="camOn ? 'bc-btn-on' : 'bc-btn-off'" @click="toggleCam" data-testid="broadcast-toggle-cam">
                             <i class="bi" :class="camOn ? 'bi-camera-video' : 'bi-camera-video-off'"></i>
@@ -224,6 +296,9 @@ onBeforeUnmount(() => {
                         <button class="bc-btn" :class="micOn ? 'bc-btn-on' : 'bc-btn-off'" @click="toggleMic" data-testid="broadcast-toggle-mic">
                             <i class="bi" :class="micOn ? 'bi-mic' : 'bi-mic-mute'"></i>
                             <span>{{ micOn ? 'Mikrofon Açık' : 'Mikrofon Kapalı' }}</span>
+                        </button>
+                        <button class="bc-btn bc-btn-ghost2" @click="copyViewerLink" data-testid="broadcast-copy-link">
+                            <i class="bi" :class="copied ? 'bi-check2' : 'bi-link-45deg'"></i> {{ copied ? 'Kopyalandı!' : 'Link' }}
                         </button>
                         <button class="bc-btn bc-btn-danger" @click="endBroadcast" data-testid="broadcast-end">
                             <i class="bi bi-stop-circle"></i> Yayını Bitir
@@ -299,6 +374,11 @@ onBeforeUnmount(() => {
 .bc-btn-on { background: #16a34a; }
 .bc-btn-off { background: #64748b; }
 .bc-btn-danger { background: #ef4444; }
+.bc-btn-ghost2 { background: transparent; border: 1px solid var(--border, #2a2a3a); color: var(--text, #e5e7eb); }
+.bc-btn-ghost2:hover { background: rgba(128,128,128,.12); }
+.bc-ov-title { font-size: 16px; font-weight: 700; color: #cbd5e1; margin: 4px 0 0; }
+.bc-ov-hint { font-size: 12px; color: #64748b; margin: 2px 0 0; max-width: 320px; text-align: center; }
+.bc-preview-tag { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,.6); color: #fbbf24; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; }
 
 .bc-panel { margin-top: 16px; border: 1px solid var(--border, #2a2a3a); border-radius: 12px; overflow: hidden; }
 .bc-panel-title { padding: 12px 14px; font-weight: 700; font-size: 14px; border-bottom: 1px solid var(--border, #2a2a3a); display: flex; align-items: center; gap: 8px; }
