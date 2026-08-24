@@ -1,0 +1,33 @@
+{
+  "summary": "Tested body-scroll save/restore per new app-_VeeHaSm.js bundle on desktop (1920x800) and mobile (390x844). Forward navigation reset works (both viewports: detail body.scrollTop = 0). BACK RESTORE STILL FAILS: max observed document.body.scrollTop after Back is only ~148px (desktop, required >800) and ~198px (mobile, required >1500). Home page scrollHeight is 2703 at time of Back (DOM fully present) so the restore is being clamped/overwritten to a tiny value.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "resources/js/app.js scrollMap/popstate restore", "issue": "document.body.scrollTop after browser Back is stuck at 148 (desktop) / 198 (mobile) throughout the entire 2.5s poll window; scrollHeight=2703 confirms content is present, but the restore value is not applied (or is applied then immediately reset). Required >800 desktop / >1500 mobile.", "selector": "body#kt_app_body", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Home -> auction detail -> Back", "issue": "Restore polling: samples show scrollTop transitions 0 -> 148 (single jump) then remains 148 for all 30 samples over 3s. Suggests either (a) scrollMap only captured 148 (initial small scroll like header collapse) and never the user's actual 1800/5000 scroll before the click, OR (b) something (likely Metronic KTScroll / KTScrollHandlersInitialized which is visible on window) clamps/overrides body.scrollTop shortly after restore.", "affected_selectors": ["body#kt_app_body"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Investigate why scrollMap[location.href] on home does not contain the last user scroll position. Add temporary console.log in the capture-phase 'scroll' listener to log (location.href, document.body.scrollTop) on each save, and log the value read in popstate restoreScroll(). Reproduce: scroll body to 1800, click first card, press Back — check DevTools console.",
+    "Check for interference from Metronic scripts: window.KTScroll, window.KTScrollHandlersInitialized, window.KTScrolltop, window.SmoothScroll. Any of these may re-init on Inertia page swap and reset document.body.scrollTop to 0/header offset after your requestAnimationFrame restore writes.",
+    "Verify the capture scroll listener target: attach to document with { capture: true, passive: true } — body scrolls fire scroll events on document. Confirm the listener key uses the SAME URL string as popstate reads (query string / trailing slash / origin differences will cause miss).",
+    "Consider using Inertia's router.on('before') to snapshot document.body.scrollTop right before navigation (guaranteed latest value), rather than relying on the live scroll listener which may miss the last position due to throttling.",
+    "In restoreScroll retry loop, guard against the reset: after each rAF write, also re-apply on Inertia 'success' and 'finish' events for back-navigation (currently 'finish' only resets forward). The clamp to 148 strongly suggests something writes body.scrollTop = smallValue AFTER your restore runs."
+  ],
+  "critical_code_review_comments": [
+    "The forward-reset on Inertia 'finish' unconditionally sets body.scrollTop = 0 — ensure it distinguishes forward vs popstate navigations, otherwise it can clobber the back-restore.",
+    "Live scroll listener may be attached before body#kt_app_body exists or before Metronic re-parents nodes; verify listener attach order."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "50% (forward pass, back-restore fail on both viewports)"},
+  "test_credentials": "buyer@test.com / password (not needed for this scroll test)",
+  "seed_data_creation": "",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use document.body.scrollTop (NOT window.scrollY). True scroller = body#kt_app_body. Home scrollHeight ~2703 desktop. First card selector: a[href*='/auctions/']. Detail example URL: /auctions/vintage-yashica-fotograf-makinesi-oDpn. Programmatic document.body.scrollTop = N works (confirmed with wheel + scrollTo). Poll every 100ms for 2.5s after Back and report MAX. Latest observed: desktop MAX=148 FINAL=148; mobile MAX=198 FINAL=198.",
+  "rca of the issue": "Hypothesis: (1) scrollMap never stores the true pre-nav scroll (listener misses or key mismatch), OR (2) Metronic KTScroll/scroll handlers reinitialize on Inertia page navigation and reset body.scrollTop to a small header-offset (~148/198) after the rAF restore writes complete. The identical 148/198 across all 30 samples (no oscillation) points strongly to a single write that succeeds then persists at the wrong value — meaning the stored map value itself is likely 148/198, not 1800/5000. Recommend logging scrollMap contents inside restoreScroll to confirm."
+}

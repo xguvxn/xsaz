@@ -1,0 +1,51 @@
+{
+  "summary": "Frontend-only scroll fix validation for Laravel+Inertia+Vue auction platform. Identified TRUE scroll container as document.body (id=kt_app_body) — NOT window/document.scrollingElement, NOT any #kt_app_* nested containers. The Inertia 'finish' scroll fix in resources/js/app.js works: detail page opens at top on BOTH desktop and mobile after scrolling homepage ~1800px/6000px and clicking a card. Login smoke test passed (buyer@test.com).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Browser Back button scroll restoration",
+        "issue": "After navigating Home -> Detail -> Back, the homepage scroll position is NOT restored (body.scrollTop=0 instead of previous ~1900 desktop / ~6000 mobile). Root cause: Inertia scroll restoration writes to window/document.scrollingElement, but the real scroll container is document.body (id=kt_app_body). AppLayout/CSS puts `overflow: hidden auto` on both html and body, making <body> the actual scroller. Inertia's restore never writes to body.scrollTop, so nothing is restored. This was outside the primary fix scope but is a real UX bug on back navigation.",
+        "affected_selectors": ["body#kt_app_body"]
+      }
+    ],
+    "design_issues": [
+      {"screen": "Detail page (all)", "issues": ["Several storage/auctions/*.jpg images return 404 (seed data issue, flagged as ignorable by requester)."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "PRIMARY SCROLL FIX (Home -> Detail) IS WORKING on both desktop and mobile. No action needed.",
+    "OPTIONAL: To also restore scroll on browser Back, in resources/js/app.js popstate handler / preserveScroll flow, also restore document.body.scrollTop (id=kt_app_body). Currently only window/scrollingElement are restored by Inertia. Suggestion: capture body.scrollTop before Inertia visit and restore on popstate.",
+    "OPTIONAL: Consider changing layout CSS so window is the sole scroller (remove `overflow: hidden auto` from html+body, or set only html to auto). This would make Inertia's built-in scroll restoration work out of the box."
+  ],
+  "critical_code_review_comments": [
+    "hardScrollTop() in app.js correctly resets document.body.scrollTop (line 60) which is why the primary fix works — good.",
+    "The unusual layout (both html AND body having `overflow: hidden auto`) is the underlying cause of the whole scroll-position class of bugs; document it prominently or normalize it.",
+    "Inertia's preserveScroll/restore is effectively a no-op for this app since it targets window, not body — needs a custom scroll snapshotter keyed on history state."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "Primary scroll fix: 100% pass (desktop+mobile). Back-restore: fail."},
+  "measurements": {
+    "desktop_1920x800": {
+      "home_initial": {"windowY": 0, "htmlTop": 0, "bodyTop": 0, "bodyScrollHeight": 2703},
+      "home_after_scroll": {"windowY": 0, "htmlTop": 0, "bodyTop": 1903, "note": "ONLY body#kt_app_body scrolled. All #kt_app_root/page/wrapper/main/content/content_container had scrollTop=0 and overflow:visible."},
+      "detail_after_nav": {"windowY": 0, "htmlTop": 0, "bodyTop": 0, "verdict": "PASS - at top"},
+      "home_after_back": {"windowY": 0, "htmlTop": 0, "bodyTop": 0, "verdict": "FAIL - scroll not restored"}
+    },
+    "mobile_390x844": {
+      "home_initial": {"windowY": 0, "htmlTop": 0, "bodyTop": 0, "bodyScrollHeight": 9661},
+      "home_after_scroll": {"windowY": 0, "htmlTop": 0, "bodyTop": 6000, "note": "ONLY body#kt_app_body scrolled."},
+      "detail_after_nav": {"windowY": 0, "htmlTop": 0, "bodyTop": 0, "verdict": "PASS - at top"},
+      "home_after_back": {"windowY": 0, "htmlTop": 0, "bodyTop": 0, "verdict": "FAIL - scroll not restored"}
+    },
+    "real_scroll_container": "document.body (id=kt_app_body) — html+body both have `overflow: hidden auto`. #kt_app_root/page/wrapper/main/content/content_container all have overflow:visible and never scroll.",
+    "login_smoke": "PASS - buyer@test.com/password -> redirected to /dashboard"
+  },
+  "seed_data_creation": "None. Used existing seeded auctions.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The TRUE scroll container in this Laravel/Metronic layout is document.body (id=kt_app_body), NOT window and NOT any #kt_app_* wrapper. Always test scroll behavior via document.body.scrollTop. Mouse wheel scrolls body correctly; window.scrollTo() is a no-op. Inertia's built-in scroll restore does NOT work for this app (targets window). The current hardScrollTop() fix in app.js works for forward navigation because it resets body.scrollTop, but back-restore is not implemented.",
+  "rca of the issue": "Layout CSS sets `overflow: hidden auto` on BOTH html and body, which promotes <body id=kt_app_body> to be the sole vertical scroll container. window.scrollY and document.documentElement.scrollTop remain 0 even when the page is scrolled. Previously, the app.js fix only reset window/scrollingElement (which were already 0), so the perceived scroll position (in body) was never reset on Inertia navigation. Current fix (adds document.body.scrollTop = 0) resolves the forward-navigation bug. The back-button restore remains broken because Inertia writes restored scroll to window, not body."
+}

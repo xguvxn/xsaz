@@ -1,0 +1,45 @@
+{
+  "summary": "Scroll restore fix VERIFIED on both desktop (1920x800) and mobile (390x844). Forward nav lands at top, Back restores the exact previous scroll position instantly and holds it, forward-after-back also lands at top.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_details": {
+    "desktop_1920x800": {
+      "pre_nav_body_scrollTop": 1800,
+      "forward_detail_body_scrollTop": 0,
+      "forward_pass": true,
+      "back_MAX_body_scrollTop": 1800,
+      "back_FINAL_body_scrollTop": 1800,
+      "back_pass": true,
+      "back_samples_100ms_3s": "all 30 samples = 1800 (restored on first sample, held stable)",
+      "forward_after_back_body_scrollTop": 0,
+      "forward_after_back_pass": true
+    },
+    "mobile_390x844": {
+      "pre_nav_body_scrollTop": 5000,
+      "forward_detail_body_scrollTop": 0,
+      "forward_pass": true,
+      "back_MAX_body_scrollTop": 5000,
+      "back_FINAL_body_scrollTop": 5000,
+      "back_pass": true,
+      "back_samples_100ms_3s": "all 30 samples = 5000 (restored on first sample, held stable)",
+      "forward_after_back_body_scrollTop": 0,
+      "forward_after_back_pass": true
+    },
+    "notes": "document.body (id=kt_app_body) confirmed as true scroll container (body.scrollHeight 2703 desktop / 9661 mobile; documentElement.scrollHeight equals viewport). Prior clamp-to-148/198 bug from iteration_4 no longer reproduces — suppressSave on router.on('before') prevents the clamp value from being recorded."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% (6/6 assertions across 2 viewports)"},
+  "test_credentials": "buyer@test.com / password (not needed — public homepage tested)",
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Scroll restore is working correctly on both viewports. body.scrollTop is the source of truth (id=kt_app_body). MAX==FINAL==pre-nav on both viewports means restore is immediate and stable (no bounce back to clamp).",
+  "rca of the issue": "Previous iteration_4 failure RCA (already fixed by main agent): during Inertia DOM swap, new short page temporarily clamped body.scrollTop to ~148/198 and the scroll listener wrongly persisted that clamp as the leaving page's saved position. Fix (in /app/laravel_project/project/resources/js/app.js) sets suppressSave=true immediately on router.on('before')/popstate so the clamp is not recorded, and restoreScroll re-applies the saved target for up to 2s. Verified working."
+}

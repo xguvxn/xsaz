@@ -1,0 +1,30 @@
+{
+  "summary": "Tested scroll save/restore on artirdim.com public URL. Bundle app-D4geG9ya.js confirmed loaded. FORWARD nav PASSES on both desktop (1920x800) and mobile (390x844) — detail page opens at body.scrollTop=0. FORWARD-AFTER-BACK also PASSES (detail opens at top). BACK RESTORE STILL FAILS: identical to iteration_3 — desktop restores to only 148px (target ~1800), mobile restores to only 198px (target ~5000). MAX observed during 3s poll never exceeds these values; scrollTop is flat at 148/198 from 0ms through 2925ms. Home body.scrollHeight is 2703 immediately on back (content fully rendered), so the height is NOT the blocker — the 2s setInterval retry loop is either not running, or scrollMap holds the wrong saved value (likely 148/198 was written into scrollMap by the scroll listener AFTER an Inertia-triggered reset overwrote the 1800/5000 the user scrolled to, because suppressSave wasn't set during that internal reset).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "app.js scroll restore (setInterval 50ms/2000ms + scrollMap)", "issue": "Back-restore reaches only 148px desktop / 198px mobile despite user having scrolled to 1800/5000. Value is flat across the full 3s poll window (0ms..2925ms all 148 on desktop). Home body.scrollHeight=2703 is available immediately, so late content growth is NOT the cause this iteration. Root cause appears to be that scrollMap is storing an incorrect (small) value — the scroll-save listener likely captures a body.scrollTop reset that happens during click/Inertia-visit BEFORE suppressSave is applied, overwriting the true 1800 with 148.", "selector": "document.body#kt_app_body", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "In /app/laravel_project/project/resources/js/app.js: set suppressSave=true at router.on('before') / on link-click (mousedown/click on a.idx-card) so the save-listener cannot overwrite scrollMap with the 148/198 value that occurs during Inertia visit teardown.",
+    "Alternatively, save scroll position on link click (capture body.scrollTop at click time and freeze it) instead of relying on the last scroll event before navigation.",
+    "Add a console.log inside the setInterval restore loop and inside the save listener to confirm (a) scrollMap value being read on popstate and (b) the restore interval is actually firing 40 times over 2s. This will disambiguate 'setInterval not running' vs 'saved value is 148'.",
+    "Verify popstate handler reads the correct key (URL) — if URL includes/excludes trailing slash between save and restore, scrollMap lookup returns undefined and body stays at whatever Inertia set (148/198)."
+  ],
+  "critical_code_review_comments": [
+    "Timeline data proves body height (2703) is fully available at 0ms after Back — the 2s retry-until-tall-enough strategy does not address this bug; the saved value itself is wrong or the lookup misses.",
+    "Suppress-save flag must cover the click→popstate window, not just programmatic scrolls."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "75% (3 of 4 scenarios pass per viewport; back-restore fails on both viewports)"},
+  "test_credentials": "buyer@test.com / password (not needed — public browsing)",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bundle loaded is app-D4geG9ya.js. Test with document.body.scrollTop (NOT window.scrollY — window scroll is always 0). Home page height is 2703px. On desktop 1920x800 scroll home to 1800 then click first a.idx-card. Detail opens at 0 (good). On Back, poll document.body.scrollTop for 3s: expected ~1800, observed 148 flat. Mobile 390x844 scroll to 5000 → observed 198 flat. FORWARD and FORWARD-AFTER-BACK both work. Timeline shows scrollHeight=2703 available at 0ms — not a race with re-render.",
+  "rca of the issue": "scrollMap almost certainly contains 148 (desktop) / 198 (mobile) rather than 1800 / 5000. Sequence: (1) user scrolls body to 1800, save-listener stores 1800 in scrollMap. (2) User clicks card → Inertia begins visit → body.scrollTop is reset to a small value (148) somewhere in Inertia's teardown / layout change (mobile header, dialog, or layout swap). (3) The scroll-save listener fires on that reset and overwrites scrollMap[home]=148 because suppressSave was NOT set during click-triggered scroll. (4) On Back, restore setInterval faithfully reapplies 148 for 2s. Fix: set suppressSave=true at mousedown/click on internal links AND during router 'before' event, then reset only after 'finish'."
+}

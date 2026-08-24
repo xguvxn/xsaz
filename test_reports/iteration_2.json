@@ -1,0 +1,80 @@
+{
+  "summary": "Tested body.scrollTop-based scroll behavior on artirdim.com preview (bundle app-Dbg7Nccy.js). FORWARD navigation still works correctly on both viewports (detail_after_nav = 0). BACK-button scroll RESTORE FAILS on both desktop and mobile — document.body.scrollTop stays at 0 for the entire 3s window after browser Back, instead of restoring to the previously saved value (~1800 desktop / ~5000 mobile).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "resources/js/app.js scroll restore logic (bundle app-Dbg7Nccy.js)",
+        "issue": "Browser Back does NOT restore document.body.scrollTop. Measured home_after_back = 0 on both viewports. Continuous 100ms poll for 3s after go_back() shows scrollTop = 0 the entire time — no restoration attempt ever visibly executes.",
+        "selector": "document.body (id=kt_app_body)",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Home → auction detail → browser Back → Home",
+        "issue": "Scroll position lost on Back. Expected body.scrollTop > 800 (desktop) / > 1500 (mobile); got 0.",
+        "affected_selectors": ["document.body"]
+      }
+    ],
+    "design_issues": []
+  },
+  "measurements": {
+    "desktop_1920x800": {
+      "home_after_scroll": 1800,
+      "detail_after_nav": 0,
+      "home_after_back": 0,
+      "expected_home_after_back": "> 800",
+      "forward_nav": "PASS",
+      "back_restore": "FAIL"
+    },
+    "mobile_390x844": {
+      "home_after_scroll": 5000,
+      "detail_after_nav": 0,
+      "home_after_back": 0,
+      "expected_home_after_back": "> 1500",
+      "forward_nav": "PASS",
+      "back_restore": "FAIL"
+    },
+    "diagnostic_polling_desktop": "34 samples at 100ms intervals over ~3.5s covering pre-back, popstate, and post-back windows — every sample recorded document.body.scrollTop = 0. Peak scrollTop after go_back() = 0."
+  },
+  "rca of the issue": {
+    "reproduction": "1) Load https://laravel-vue-stream.preview.emergentagent.com. 2) Set document.body.scrollTop = 1800 (desktop) or 5000 (mobile). 3) Click a.idx-card. 4) Detail page loads at scrollTop 0 (correct). 5) Press browser Back. 6) Observe document.body.scrollTop stays 0 (BUG — should be restored to prior value).",
+    "diagnostic_evidence": [
+      "history.state.key is ALWAYS null in this Inertia setup — history.state contains {page:{...}} but no 'key' field. Therefore pageKey() in app.js falls back to window.location.href. This should still work as a key because the URL is the same when returning to home.",
+      "popstate event DOES fire on Back (recorded at correct timestamp) so popState flag should be set to true.",
+      "But scrollBodyTo(y) is either (a) never invoked, (b) invoked with y=0 because scrollPositions[homeHref] was never saved, or (c) invoked but immediately overwritten by hardScrollTop().",
+      "Continuous 100ms scroll polling over 3.5s post-back showed NO transient spike — body.scrollTop never became non-zero even for a single sample, which rules out theory (c) unless overwrite happens synchronously in the same task."
+    ],
+    "most_likely_causes": [
+      "A) router.on('finish') may NOT fire (or may fire with different event shape) for popstate-triggered visits in the installed Inertia version, so the restore block never runs. Verify with console.log inside the finish handler.",
+      "B) router.on('before') may not fire on the forward click either (e.g., if the link uses standard <a href> and full page reload is prevented some other way), so scrollPositions[homeHref] never gets 1800 and default is 0. Verify by logging inside the before handler.",
+      "C) The 800ms safety timeout resets popState = false before finish fires — but this would only apply if finish is delayed >800ms; unlikely to be the sole cause but possible on slow cold cache."
+    ],
+    "recommended_fixes_for_main_agent": [
+      "Add temporary console.log inside router.on('before') and router.on('finish') in resources/js/app.js to verify which hooks actually fire on forward click AND on browser Back. This will identify whether the failure is at save-time or restore-time.",
+      "As a robustness measure, ALSO save scroll on 'scroll' events (throttled) into scrollPositions[currentHref], not only on 'before'. This guarantees a value exists even if 'before' does not fire for a given navigation.",
+      "In the popstate listener itself, do NOT rely on router.on('finish'); instead schedule the restore directly (e.g., requestAnimationFrame + a couple of retries at 60/120/240ms) using scrollPositions[location.href]. This decouples restoration from Inertia lifecycle timing.",
+      "Remove the 800ms popState-reset safety, or increase it, so it cannot race with a slow finish event.",
+      "Also verify that hardScrollTop() is NOT being called after the restore on popstate — the current guard (`if (popState) { ...; return; }`) looks correct, but the setTimeout(hardScrollTop, 60) inside forward path is fine; ensure no other listener (e.g., initKT / KTScroll.createInstances) is resetting body.scrollTop after arrival."
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix browser Back scroll restoration for document.body (id=kt_app_body). Currently 0 on both desktop and mobile — should restore to the previously saved body.scrollTop value.",
+    "Add instrumentation logs to router.on('before')/router.on('finish') to determine which hook is failing, then apply a popstate-driven restore that does not depend on Inertia's finish lifecycle.",
+    "Consider throttled scroll-listener-based saving to make the saved value robust even when 'before' does not fire."
+  ],
+  "critical_code_review_comments": [
+    "resources/js/app.js relies on router.on('finish') firing for popstate navigations. In some Inertia versions this hook does not fire (or fires with different flags) for cached back-nav, which appears to be the case here.",
+    "pageKey() falls back to location.href because history.state.key is null in this app — this is fine for exact-URL round-trips but will break if the URL includes changing query strings (e.g., pagination/filter state).",
+    "The 800ms popState reset in the popstate handler creates a race condition: if the Inertia visit completes after 800ms, restore won't execute. Slow networks / cold caches will silently break restoration."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "50% (forward-nav PASS, back-restore FAIL on both viewports)"},
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Only frontend (scroll behavior) tested. The real scroll container is document.body (id=kt_app_body). Always measure body.scrollTop, not window.scrollY. Forward nav works (detail_after_nav=0). Back-restore is broken: home_after_back=0 on 1920x800 (scrolled from 1800) and on 390x844 (scrolled from 5000). Bundle in use: app-Dbg7Nccy.js (verified contains 'scrollRestoration', 'popstate', 'kt_app_root'). history.state.key is null so pageKey() falls back to location.href.",
+  "test_credentials": "Not used (test does not require login)."
+}

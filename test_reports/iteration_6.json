@@ -1,0 +1,36 @@
+{
+  "summary": "End-to-end frontend testing of the new WebRTC live-streaming + polling chat feature on artirdim.com. Seller broadcast page renders with all required data-testid nodes; Go Live successfully connects to LiveKit Cloud (wss://artirdim-r3k5lwzl.livekit.cloud, room=auction-1) and publishes camera+mic via fake media; LIVE badge appears in ~1.5s with no LiveKit config error. Second (guest) context confirms real SFU delivery: #liveVideo readyState=4, videoWidth=320, videoHeight=180, paused=false. Real-time chat works both directions within ~1.5s. Camera/microphone toggle labels flip correctly; End Broadcast returns the UI to Yayını Başlat. Homepage scroll regression still passes (document.body.scrollTop 1500 -> 0 after opening auction detail). Discovered one visibility bug on the viewer/auction detail page: the section-panel that wraps #liveVideo and viewer-chat-card is display:none, so real end users cannot see the live stream or the chat UI even though data arrives correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Auctions/Show.vue (viewer)",
+        "issue": "The section-panel containing #liveVideo and viewer-chat-card has computed display:none. #liveVideo has offsetWidth=0/offsetHeight=0 while streaming (readyState=4, videoWidth=320). viewer-chat-input is functionally reachable via JS but not visible to real users. No visible tab/button to switch to the 'Canlı Yayın' section (only 'Fotoğraflar' tab is rendered on the page). End users cannot actually watch the live stream or use the chat from the auction detail page.",
+        "selector": ".section-panel (parent of #liveVideo and [data-testid=viewer-chat-card])",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Viewer auction detail", "issues": ["Missing/hidden tab to activate the Canlı Yayın panel when a.is_live is true"]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "In resources/js/Pages/Auctions/Show.vue, ensure the 'Canlı Yayın' section-panel becomes active (display != none) automatically when a.is_live is true, or add a visible tab/toggle button so viewers can switch to it. Currently only 'Fotoğraflar' is active and the live panel stays hidden.",
+    "Optionally show 'CANLI' pulse near the media/tabs area and auto-activate the live tab on page load when the stream is live."
+  ],
+  "critical_code_review_comments": [
+    "The viewer-chat card and #liveVideo live inside a non-active section-panel; there is no user-facing control to activate it in the current build, effectively hiding the entire streaming feature for end users despite the WebRTC path working.",
+    "Public assets: multiple 404s for storage/auctions/*.jpg (per request, ignored) — worth cleaning up seed image paths.",
+    "connectViewerStream() relies on auction.is_live at page load only; consider polling/subscribing so that a viewer already on the page can start receiving when the seller goes live."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "5/6 test groups fully pass; 1 visibility bug on viewer page"},
+  "test_credentials": "seller@test.com / password ; buyer@test.com / password (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Fake-media Chromium flags + camera/mic grantPermissions on the origin are already handled by the automation harness. Seller must click Go Live BEFORE opening the viewer page (Show.vue only connects when a.is_live is true at load). The viewer-chat-input is inside a section-panel that is display:none by default on auction detail; verifying chat via Playwright required a JS-dispatched fill+click. After the fix, retest by opening /auctions/<slug> as guest or buyer and asserting #liveVideo has offsetWidth>0 and viewer-chat-input is visible. Key results captured: LIVE badge in 1.5s, viewer #liveVideo {readyState:4, videoWidth:320, videoHeight:180, paused:false}, chat buyer->seller in 1.0s, seller->buyer in 1.5s, cam label 'Kamera Açık'->'Kamera Kapalı', mic 'Mikrofon Açık'->'Mikrofon Kapalı', end returned to Yayını Başlat, regression body.scrollTop 1500->0.",
+  "rca of the issue": "Auctions/Show.vue renders the live stream + viewer chat inside a section-panel that starts with display:none (only .section-panel.active is displayed). On the current build, only the 'Fotoğraflar' section-panel is set active; there is no tab/button visible to switch to the 'Canlı Yayın' section, and no logic to auto-activate it when a.is_live becomes true. Fix: watch/computed on a.is_live to set the Canlı Yayın panel to .active (or add a visible tab in the tab bar) so that #liveVideo mounts visibly and the viewer chat card is shown."
+}

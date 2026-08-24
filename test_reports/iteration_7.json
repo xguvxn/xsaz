@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend-only retest of the WebRTC live streaming + viewer live-panel visibility fix. Seller go-live path works end-to-end (LIVE badge in <2s, LiveKit connect via wss://artirdim-r3k5lwzl.livekit.cloud, /livekit/token 200, /seller/.../live-status 200). Primary fix verified: when props.a.is_live is true, Show.vue boot() auto-calls window.switchTab('stream') and connectViewerStream(), so #panel-stream becomes display:block (class 'section-panel active'), #liveVideo becomes visible (534x299 offset) and playing (readyState=4, videoWidth=640, videoHeight=360, paused=false). #cam-off-state ('Satıcı henüz yayın başlatmadı') becomes display:none and #stream-live-pill becomes display:inline-flex once LiveKit onStatus='connected' fires. Bi-directional polling chat works within <5s (buyer->seller data-testid=broadcast-chat-messages, seller->buyer data-testid=viewer-chat-messages). End Broadcast returns seller UI to data-testid=broadcast-go-live. IMPORTANT: The scenario initially failed on the provided slug because the seeded auction 'antika-masa-saati-ve-vazo-seti-ZcBz' had status='sold' from earlier iterations, which made Auction::hasFinished() true. BroadcastController::liveStatus() then force-sets is_live=false regardless of the request payload, so props.a.is_live was always false on the viewer page and Show.vue's auto-switch never ran. After restoring status='active' in DB, every acceptance criterion passes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /seller/auctions/{slug}/live-status", "issue": "Silently coerces is_live=false when the auction is in a finished status (sold/ended/cancelled) and still returns HTTP 200 with success:true. Client sees 'success' but DB is_live stays 0, breaking viewer detection. Consider returning 409/422 with an explicit error, or exposing this state to the seller UI so the LIVE badge does not misrepresent the persisted state."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Seller Go Live -> Viewer auction detail auto-shows live panel",
+        "issue": "Only works while auction.status is not in ['ended','sold','cancelled']. If a test/user 'Sat's a bid (which flips status to 'sold') the viewer can never see the live panel again for that auction because BroadcastController::liveStatus forces is_live=false. The Show.vue fix itself is correct; this is a data/state precondition problem.",
+        "affected_selectors": ["#panel-stream", "#liveVideo", "#stream-live-pill", "#cam-off-state", "[data-testid=viewer-chat-input]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "No frontend action required — the Show.vue boot() auto-switch fix is verified.",
+    "(Optional/backend) BroadcastController::liveStatus should surface the 'cannot go live because auction has finished' case (return 409/422 with error) so the seller UI doesn't show a fake LIVE badge while DB is_live remains 0 and no viewer can watch.",
+    "(Data hygiene) The seeded test auction 'antika-masa-saati-ve-vazo-seti-ZcBz' had accumulated status='sold' from prior iterations; reseed or reset before subsequent LIVE tests, or pick an auction that is guaranteed to remain 'active'."
+  ],
+  "critical_code_review_comments": [
+    "Show.vue: props.a.is_live is only sampled at page load; if the seller goes live AFTER the viewer opens the page, viewer never connects. Consider a lightweight poll (or reuse existing chat/bid poll) to detect is_live transitions and call connectViewerStream()+switchTab('stream') on transition to live.",
+    "BroadcastController::liveStatus swallows the finished-auction case silently (returns success:true even though it forced is_live=false). This mismatches what the seller UI does (immediately shows the LIVE badge based on client-side status.value='live').",
+    "Public assets under storage/auctions/*.jpg still 404 on the viewer page (per problem statement they're being ignored, but worth cleaning seed image paths)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "6/6 acceptance criteria pass after data reset (100%)"},
+  "test_credentials": "seller@test.com / password ; buyer@test.com / password (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Modified DB to reset the test auction back to a usable state: UPDATE auctions SET status='active', is_live=0, live_ended_at=NULL WHERE slug='antika-masa-saati-ve-vazo-seti-ZcBz'. No new rows created.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Before running the seller-goes-live / viewer-sees-live scenario, ensure the target auction has status='active' (SELECT status FROM auctions WHERE slug=...). If earlier tests 'Sat' a bid the status flips to 'sold' and BroadcastController::liveStatus() will refuse to set is_live=true (returning success:true but forcing false), which silently breaks the whole viewer live path. After the reset, the current Show.vue fix works: #panel-stream => display:block with class 'section-panel active'; #liveVideo 534x299 readyState=4 videoWidth=640 videoHeight=360 paused=false; #cam-off-state display:none; #stream-live-pill display:inline-flex; viewer-chat-input visible; chat b2s and s2b both round-trip in <5s. Broadcast end returns to Yayını Başlat.",
+  "rca of the issue": "Iteration_6's 'live panel hidden' report was root-caused to two chained factors: (1) auction data drift — the test slug had accumulated status='sold' from previous 'Sat' clicks; (2) BroadcastController::liveStatus() overrides $live=false whenever Auction::hasFinished() returns true (statuses ended/sold/cancelled) but still responds 200/success. The frontend fix in Show.vue (boot() calls switchTab('stream') when a.is_live && !a.has_finished) works correctly — verified after resetting status back to 'active'. Mitigation: either (a) return a non-2xx from liveStatus in the finished-auction case so the seller UI can show a real error and not display the LIVE badge, and/or (b) reseed the test auction to 'active' before each live-stream test."
+}
