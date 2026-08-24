@@ -1,0 +1,42 @@
+{
+  "summary": "Mobile bid bar tidy-up verified on /auctions/antika-masa-saati-ve-vazo-seti-ZcBz at 390x844. Bar is compact (125px), 3 stacked rows (sticky-top-line 18px + sticky-quick-row 36px + sticky-input-row 42px), 3 visible chips, no horizontal overflow, chip fill-only behavior confirmed (no auto-submit), submit works with live-min refresh, and sidebar no-overlap regression holds.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mobile sticky-top-line timer", "issues": ["Timer renders as '4327:30' (mm:ss with 4327 minutes). Consider H:MM:SS or D H:MM formatting when remaining time exceeds 60 minutes for readability. Not blocking."]}
+    ]
+  },
+  "test_results": {
+    "MOBILE_LAYOUT_TIDY": {
+      "pass": true,
+      "bar_offsetHeight_px": 125,
+      "rows": [
+        {"class": "sticky-top-line", "height": 18, "text": "Güncel 29.760 ₺ 4327:30"},
+        {"class": "sticky-quick-row", "height": 36},
+        {"class": "sticky-input-row", "height": 42},
+        {"class": "bid-error", "height": 0}
+      ],
+      "chip_texts": ["En düşük", "+240 ₺", "+1.200 ₺"],
+      "note": "querySelectorAll('[data-testid^=mobile-quick-]') returned 4 nodes because a wrapper element also carries a matching testid prefix, but only 3 chip buttons are rendered (verified visually in screenshot)."
+    },
+    "NO_HORIZONTAL_OVERFLOW": {"pass": true, "scrollWidth": 390, "innerWidth": 390},
+    "CHIP_FILL_ONLY": {"pass": true, "price_before": "29.760 ₺", "price_after_3s": "29.760 ₺", "input_after_chip": "30240", "bid_error": ""},
+    "SUBMIT_WORKS": {"pass": true, "price_before": "29.760 ₺", "price_after": "30.240 ₺", "bid_error": ""},
+    "CHIP_SELF_REFRESH": {"pass": true, "input_min_after_bid": "30480", "input_value_from_chip0": "30480", "price_after_submit": "30.480 ₺", "bid_error": ""},
+    "SIDEBAR_NO_OVERLAP": {"pass": true, "bar_display_when_drawer_open": "none", "drawer_overlay_present": true}
+  },
+  "test_report_links": ["/app/test_reports/mobile_bar.png", "/app/test_reports/mobile_bar_after.png"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Timer format shown in sticky-top-line ('4327:30') is unusual for a mm:ss when the remaining time is >1h; consider H:MM:SS formatting for clarity."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "buyer@test.com / password (worked)",
+  "seed_data_creation": "Placed 2 additional bids on auction antika-masa-saati-ve-vazo-seti-ZcBz (29.760 -> 30.240 -> 30.480). Auction remains active/unsold.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Mobile bid bar (390x844) is compact ~125px with 3 rows and 3 chips. Chip 0 = En düşük (fills input.min), Chip 1 = +X ₺ single increment, Chip 2 = +5×X ₺. Chips fill input only; submit is separate. #kt_app_sidebar_mobile_toggle opens drawer and body:has(.drawer-overlay) rule hides .bid-sticky-bar."
+}

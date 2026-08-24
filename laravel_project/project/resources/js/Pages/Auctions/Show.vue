@@ -23,7 +23,6 @@ function fmtTL(v) { return new Intl.NumberFormat('tr-TR').format(Math.round(v)) 
 const quickSteps = [
     { mult: 0, label: 'En düşük' },
     { mult: 1, label: '+' + fmtTL(bidStep) },
-    { mult: 3, label: '+' + fmtTL(bidStep * 3) },
     { mult: 5, label: '+' + fmtTL(bidStep * 5) },
 ];
 function quickBidMobile(mult) {
@@ -462,14 +461,14 @@ onUnmounted(() => {
 
         <!-- MOBİL STICKY BAR (canlı teklif çubuğu) -->
         <div v-if="config.is_auth === '1' && a.is_active && !a.is_owner" class="bid-sticky-bar">
-            <div class="sticky-price-row">
-                <div>
-                    <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Güncel Teklif</div>
-                    <div class="sticky-price" id="live-price-mobile">{{ a.display_price }}</div>
+            <div class="sticky-top-line">
+                <div class="stl-price">
+                    <span class="stl-lbl">Güncel</span>
+                    <span class="sticky-price" id="live-price-mobile">{{ a.display_price }}</span>
                 </div>
-                <div style="text-align:right;">
-                    <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Kalan Süre</div>
-                    <div class="sticky-timer" id="live-timer-mobile">—</div>
+                <div class="stl-timer">
+                    <i class="bi bi-clock"></i>
+                    <span class="sticky-timer" id="live-timer-mobile">—</span>
                 </div>
             </div>
             <!-- Tek dokunuşla hızlı teklif: inputa yazar (otomatik GÖNDERMEZ) -->
@@ -480,12 +479,12 @@ onUnmounted(() => {
                 </button>
             </div>
             <div class="sticky-input-row">
-                <input type="number" id="bid-input-mobile" data-testid="mobile-bid-input" :min="a.min_bid" :step="config.min_increment" :placeholder="`Min: ${a.min_bid_fmt}`">
+                <input type="number" id="bid-input-mobile" data-testid="mobile-bid-input" :min="a.min_bid" :step="config.min_increment" :placeholder="`En az ${a.min_bid_fmt}`">
                 <button class="sticky-submit" onclick="submitBidMobile()" data-testid="mobile-bid-submit">
                     <i class="bi bi-lightning-charge-fill"></i> Teklif Ver
                 </button>
             </div>
-            <div class="bid-error" id="bid-error-mobile" style="margin-top:8px;margin-bottom:0;"></div>
+            <div class="bid-error" id="bid-error-mobile" style="margin-top:6px;margin-bottom:0;"></div>
         </div>
 
         <!-- Lightbox -->
@@ -547,7 +546,7 @@ onUnmounted(() => {
 }
 
 /* Mobil hızlı teklif çipleri (tek satır, kompakt) */
-.sticky-quick-row { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.sticky-quick-row { display: flex; gap: 6px; overflow-x: auto; margin-top: 6px; padding: 1px 0; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 .sticky-quick-row::-webkit-scrollbar { display: none; }
 .sticky-quick-chip {
     flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
