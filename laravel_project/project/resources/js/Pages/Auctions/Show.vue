@@ -17,6 +17,13 @@ function messageSeller() {
     router.post(props.config.messages_start_url, { user_id: props.a.seller.id });
 }
 
+// Mobil: tek dokunuşla hızlı teklif — inputu doldur ve mevcut submit fonksiyonunu çağır
+function quickBidMobile(val) {
+    const input = document.getElementById('bid-input-mobile');
+    if (input) input.value = val;
+    if (typeof window.submitBidMobile === 'function') window.submitBidMobile();
+}
+
 function scrollToChat() {
     // Canlı sekmesindeki sohbete yumuşak kaydır ve inputa odaklan
     try { window.switchTab && window.switchTab('stream'); } catch (e) {}
@@ -79,6 +86,8 @@ async function connectViewerStream() {
                     if (pill) pill.style.display = 'inline-flex';
                     const vol = document.getElementById('vol-btn');
                     if (vol) vol.style.display = 'inline-flex';
+                    const fs = document.getElementById('fs-btn');
+                    if (fs) fs.style.display = 'inline-flex';
                 }
             },
         });
@@ -436,7 +445,7 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <!-- MOBİL STICKY BAR -->
+        <!-- MOBİL STICKY BAR (canlı teklif çubuğu) -->
         <div v-if="config.is_auth === '1' && a.is_active && !a.is_owner" class="bid-sticky-bar">
             <div class="sticky-price-row">
                 <div>
@@ -448,9 +457,17 @@ onUnmounted(() => {
                     <div class="sticky-timer" id="live-timer-mobile">—</div>
                 </div>
             </div>
+            <!-- Tek dokunuşla hızlı teklif -->
+            <div v-if="a.quick && a.quick.length" class="sticky-quick-row" data-testid="mobile-quick-row">
+                <button v-for="(q, qi) in a.quick" :key="qi" type="button" class="sticky-quick-chip"
+                        @click="quickBidMobile(q.val)" :data-testid="`mobile-quick-${qi}`">
+                    <span class="sqc-inc">+{{ q.inc_fmt }}</span>
+                    <span class="sqc-val">{{ q.val_fmt }}</span>
+                </button>
+            </div>
             <div class="sticky-input-row">
-                <input type="number" id="bid-input-mobile" :min="a.min_bid" :step="config.min_increment" :placeholder="`Min: ${a.min_bid_fmt}`">
-                <button class="sticky-submit" onclick="submitBidMobile()">
+                <input type="number" id="bid-input-mobile" data-testid="mobile-bid-input" :min="a.min_bid" :step="config.min_increment" :placeholder="`Min: ${a.min_bid_fmt}`">
+                <button class="sticky-submit" onclick="submitBidMobile()" data-testid="mobile-bid-submit">
                     <i class="bi bi-lightning-charge-fill"></i> Teklif Ver
                 </button>
             </div>
@@ -514,4 +531,16 @@ onUnmounted(() => {
     .sss-actions { width: 100%; }
     .sss-btn { flex: 1; justify-content: center; }
 }
+
+/* Mobil hızlı teklif çipleri */
+.sticky-quick-row { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 2px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.sticky-quick-row::-webkit-scrollbar { display: none; }
+.sticky-quick-chip {
+    flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 8px 14px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); cursor: pointer; min-height: 46px; line-height: 1.1;
+}
+.sticky-quick-chip:active { transform: scale(.96); }
+.sqc-inc { font-size: 13px; font-weight: 800; color: var(--primary); }
+.sqc-val { font-size: 10px; color: var(--muted); white-space: nowrap; }
 </style>

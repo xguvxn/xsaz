@@ -75,38 +75,38 @@ async function goLive() {
     }
 
     status.value = 'connecting';
-    try {
-        stopPreview();
-        // Önce kamera+mikrofon iznini net şekilde iste (hata mesajını netleştirir)
-        try {
-            const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            probe.getTracks().forEach((t) => t.stop());
-        } catch (permErr) {
-            if (permErr.name === 'NotAllowedError' || permErr.name === 'SecurityError') {
-                throw Object.assign(new Error('Kamera/mikrofon izni reddedildi. Tarayıcı adres çubuğundaki kamera simgesine tıklayıp "İzin ver" de ve tekrar dene.'), { handled: true });
-            }
-            if (permErr.name === 'NotFoundError' || permErr.name === 'OverconstrainedError') {
-                throw Object.assign(new Error('Bu cihazda kamera/mikrofon bulunamadı. Bir kamera bağlı olduğundan emin ol.'), { handled: true });
-            }
-            throw Object.assign(new Error('Kamera/mikrofon açılamadı: ' + (permErr.message || permErr.name)), { handled: true });
-        }
+    // Önizleme akışı kamerayı tutuyorsa serbest bırak ve cihazın boşalması için kısa bekle
+    // (aksi halde LiveKit kamerayı açarken "Could not start video source" alınır)
+    stopPreview();
+    await new Promise((r) => setTimeout(r, 350));
 
+    try {
         const { server_url, participant_token } = await fetchLiveKitToken({
             auctionSlug: props.auction.slug, role: 'broadcaster', csrf: csrf(),
         });
         room = new Room({ adaptiveStream: true, dynacast: true });
         room.on('participantConnected', () => { viewers.value = Math.max(0, room.numParticipants - 1); });
         room.on('participantDisconnected', () => { viewers.value = Math.max(0, room.numParticipants - 1); });
-        room.on('disconnected', () => { status.value = 'idle'; });
+        // Sadece KALICI kopmada idle'a düş (geçici reconnect'te yayını kapatma)
+        room.on('disconnected', () => { status.value = 'idle'; camOn.value = false; micOn.value = false; });
 
-        await room.connect(server_url, participant_token);
-        // Kamera + mikrofon aç
-        await room.localParticipant.setCameraEnabled(true);
-        await room.localParticipant.setMicrophoneEnabled(true);
-        camOn.value = true; micOn.value = true;
-        attachLocalPreview();
+        await room.connect(server_url, participant_token, { autoSubscribe: false });
 
-        // Backend'e "canlı" bilgisini bildir (izleyicilerin sekmesi açılsın)
+        // Kamerayı LiveKit üzerinden TEK SEFERDE aç (çift açılış yok)
+        let camOk = false, micOk = false, camErr = null;
+        try { await room.localParticipant.setCameraEnabled(true); camOk = true; }
+        catch (e) { camErr = e; }
+        try { await room.localParticipant.setMicrophoneEnabled(true); micOk = true; }
+        catch (e) { /* mikrofon opsiyonel */ }
+
+        camOn.value = camOk; micOn.value = micOk;
+        if (camOk) attachLocalPreview();
+
+        if (!camOk && !micOk) {
+            throw Object.assign(new Error(mapMediaError(camErr)), { handled: true });
+        }
+
+        // Backend'e "canlı" bilgisini bildir
         await fetch(props.routes.live_status, {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
@@ -115,15 +115,29 @@ async function goLive() {
 
         status.value = 'live';
         viewers.value = Math.max(0, room.numParticipants - 1);
+        // Kamera açılamadı ama mikrofon açıldıysa uyar (yayın sesli devam eder)
+        if (!camOk) errorMsg.value = 'Kamera açılamadı (' + mapMediaError(camErr) + ') — yayın şimdilik sesli. "Kamera Kapalı"ya basıp tekrar açmayı deneyebilirsin.';
     } catch (e) {
         if (e.code === 'not_configured') {
             errorMsg.value = 'Canlı yayın altyapısı (LiveKit) henüz yapılandırılmadı. Yönetici .env içine LIVEKIT_* anahtarlarını eklemeli.';
         } else {
-            errorMsg.value = e.handled ? e.message : (e.message || 'Yayın başlatılamadı. Kamera/mikrofon iznini kontrol et.');
+            errorMsg.value = e.handled ? e.message : (e.message || 'Yayın başlatılamadı.');
         }
         status.value = 'error';
         await stopRoom(false);
     }
+}
+
+// Tarayıcı medya hatalarını anlaşılır Türkçe mesaja çevir
+function mapMediaError(e) {
+    if (!e) return 'Bilinmeyen hata';
+    const n = e.name || '';
+    if (n === 'NotReadableError' || /could not start video source/i.test(e.message || '')) {
+        return 'Kamera başka bir uygulama/sekme tarafından kullanılıyor. Kamerayı kullanan diğer uygulamaları ve sekmeleri (Zoom, Meet, başka yayın vb.) kapatıp tekrar dene.';
+    }
+    if (n === 'NotAllowedError' || n === 'SecurityError') return 'Kamera/mikrofon izni reddedildi. Adres çubuğundaki kamera simgesinden izin ver.';
+    if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'Cihazda kamera/mikrofon bulunamadı.';
+    return e.message || n || 'Kamera açılamadı';
 }
 
 function attachLocalPreview() {
@@ -134,14 +148,25 @@ function attachLocalPreview() {
 
 async function toggleCam() {
     if (!room) return;
-    camOn.value = !camOn.value;
-    await room.localParticipant.setCameraEnabled(camOn.value);
-    if (camOn.value) nextTick(attachLocalPreview);
+    const next = !camOn.value;
+    try {
+        await room.localParticipant.setCameraEnabled(next);
+        camOn.value = next;
+        if (next) nextTick(attachLocalPreview);
+        if (next) errorMsg.value = '';
+    } catch (e) {
+        errorMsg.value = mapMediaError(e);
+    }
 }
 async function toggleMic() {
     if (!room) return;
-    micOn.value = !micOn.value;
-    await room.localParticipant.setMicrophoneEnabled(micOn.value);
+    const next = !micOn.value;
+    try {
+        await room.localParticipant.setMicrophoneEnabled(next);
+        micOn.value = next;
+    } catch (e) {
+        errorMsg.value = mapMediaError(e);
+    }
 }
 
 async function stopRoom(notify = true) {

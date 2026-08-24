@@ -41,6 +41,12 @@ Nearly complete. Remaining conversion item: **Seller Live Stream / WebRTC page**
 - P2: Fix seed image 404s (storage/auctions/*.jpg).
 - P3: (Opsiyonel) Chat'i production'da Reverb push'a yükselt (şu an polling).
 
+## Live streaming UX pass 2 (2026-08, this session)
+- Bug: "Could not start video source" + yayın kendi kendine kopuyor → KÖK NEDEN: goLive'da çift kamera açılışı (önizleme+probe+LiveKit). Düzeltme: tek açılış, önizleme serbest bırakma+gecikme, NotReadableError için net mesaj, kamera açılamazsa sesli devam (kopmaz). toggleCam/Mic hata korumalı.
+- Feature: İzleyici videosunda tam ekran (#fs-btn ⛶) canlıyken gösteriliyor.
+- Feature: Mobil alt teklif çubuğuna tek dokunuşluk hızlı teklif çipleri (a.quick) + quickBidMobile().
+- Doğrulama: testing agent %100 (iteration_9). İlan aktif.
+
 ## Live streaming UX pass (2026-08, this session)
 - Bug #1 (yayın başlatılamıyor): goLive izin yönetimi sağlamlaştırıldı — güvenli bağlam + kamera/mik izni ön kontrolü, net Türkçe hatalar. Gerçek sebep çoğunlukla önizleme iframe'inde kamera izni; yeni sekmede/production'da çalışır.
 - #2 Satıcı yayın sayfası: "Kamerayı Önizle" (yayına başlamadan kontrol) + "İzleyici Linki" kopyala + daha net durum/overlay.
