@@ -41,6 +41,13 @@ Nearly complete. Remaining conversion item: **Seller Live Stream / WebRTC page**
 - P2: Fix seed image 404s (storage/auctions/*.jpg).
 - P3: (Opsiyonel) Chat'i production'da Reverb push'a yükselt (şu an polling).
 
+## Mobil teklif çubuğu düzeltmeleri (2026-08, this session)
+- Boyut küçültüldü (padding/font/min-height azaltıldı, safe-area eklendi).
+- Sidebar (Metronic drawer) açıkken bar gizleniyor (z-index 90 + body:has(.drawer-overlay) → display:none) — artık üst üste binmiyor.
+- Hızlı çipler artık CANLI minimumdan (input.min, auction-show.js canlı günceller) hesaplanıyor → "En az ... girmelisiniz" bayat-değer hatası bitti.
+- Çip artık OTOMATİK GÖNDERMİYOR; sadece inputa yazıp "Teklif Ver"i vurguluyor, kullanıcı basınca gönderiliyor.
+- Doğrulama: testing agent %100 (iteration_10). İlan aktif.
+
 ## Live streaming UX pass 2 (2026-08, this session)
 - Bug: "Could not start video source" + yayın kendi kendine kopuyor → KÖK NEDEN: goLive'da çift kamera açılışı (önizleme+probe+LiveKit). Düzeltme: tek açılış, önizleme serbest bırakma+gecikme, NotReadableError için net mesaj, kamera açılamazsa sesli devam (kopmaz). toggleCam/Mic hata korumalı.
 - Feature: İzleyici videosunda tam ekran (#fs-btn ⛶) canlıyken gösteriliyor.

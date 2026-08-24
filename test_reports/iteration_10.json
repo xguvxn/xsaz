@@ -1,0 +1,51 @@
+{
+  "summary": "Mobile bid bar (390x844) tested end-to-end as buyer@test.com on /auctions/antika-masa-saati-ve-vazo-seti-ZcBz. All 5 requested behaviors verified PASS: chips visible with correct labels, chip fills input only (no auto-submit), submit accepts chip amount, chips self-refresh from live input.min after a new bid, no horizontal overflow, and the sticky bar is hidden (display:none) when the Metronic drawer is open while overlay z-index (105) sits above bar z-index (90).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "chips_visible": {"mobile-quick-0": "En düşük", "mobile-quick-1": "+240 ₺", "mobile-quick-2": "+720 ₺", "mobile-quick-3": "+1.200 ₺"},
+    "chip_fill_only_no_autosubmit": {
+      "live_price_before": "29.040 ₺",
+      "input_min_before": "29280",
+      "chip1_filled_input": "29520",
+      "live_price_after_3s_no_submit": "29.040 ₺",
+      "bid_error_mobile": "",
+      "auto_submit": "NO (correct)"
+    },
+    "submit_after_chip_accepted": {
+      "live_price_after_submit": "29.520 ₺",
+      "bid_error": "",
+      "min_error_shown": false
+    },
+    "chip_self_refresh": {
+      "new_input_min_after_bid": "29760",
+      "chip0_filled_value": "29760",
+      "live_price_after_second_submit": "29.760 ₺",
+      "bid_error": "",
+      "min_error_shown": false
+    },
+    "horizontal_overflow": {"scrollWidth": 390, "innerWidth": 390, "pass": true},
+    "sidebar_overlap_fix": {
+      "toggle_selector": "#kt_app_sidebar_mobile_toggle",
+      "with_drawer_open_bar_display": "none",
+      "bar_z_index": "90",
+      "drawer_overlay_z_index": "105",
+      "sidebar_items_clickable": true,
+      "after_close_drawer": "Bid bar element removed because clicking overlay/menu navigated user away to /orders; navigating back to auction would restore it. Behavior of drawer-open hiding is confirmed via body:has(.drawer-overlay) rule."
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "buyer@test.com / password",
+  "seed_data_creation": "None (used existing auction; 2 live bids placed as buyer as expected)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All previously-broken mobile bar behaviors are fixed and verified. The auction 'antika-masa-saati-ve-vazo-seti-ZcBz' remains active; two accepted bids from buyer@test.com moved price 29.040 -> 29.520 -> 29.760 ₺ during this run."
+}

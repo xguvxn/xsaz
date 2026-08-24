@@ -17,11 +17,26 @@ function messageSeller() {
     router.post(props.config.messages_start_url, { user_id: props.a.seller.id });
 }
 
-// Mobil: tek dokunuşla hızlı teklif — inputu doldur ve mevcut submit fonksiyonunu çağır
-function quickBidMobile(val) {
+// Mobil: tek dokunuşla hızlı teklif — CANLI minimumdan hesaplar, sadece inputa yazar (göndermez)
+const bidStep = Number(props.config?.min_increment) || 0;
+function fmtTL(v) { return new Intl.NumberFormat('tr-TR').format(Math.round(v)) + ' ₺'; }
+const quickSteps = [
+    { mult: 0, label: 'En düşük' },
+    { mult: 1, label: '+' + fmtTL(bidStep) },
+    { mult: 3, label: '+' + fmtTL(bidStep * 3) },
+    { mult: 5, label: '+' + fmtTL(bidStep * 5) },
+];
+function quickBidMobile(mult) {
     const input = document.getElementById('bid-input-mobile');
-    if (input) input.value = val;
-    if (typeof window.submitBidMobile === 'function') window.submitBidMobile();
+    if (!input) return;
+    // auction-show.js her yeni teklifte input.min'i canlı günceller → bayat değer sorunu biter
+    const liveMin = Number(input.min) || Number(props.a.min_bid) || 0;
+    input.value = liveMin + bidStep * mult;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+    // Görsel ipucu: "Teklif Ver" butonunu kısa vurgula (kullanıcı basınca gönderilecek)
+    const btn = document.querySelector('.bid-sticky-bar .sticky-submit');
+    if (btn) { btn.classList.add('pulse'); setTimeout(() => btn.classList.remove('pulse'), 700); }
 }
 
 function scrollToChat() {
@@ -457,12 +472,11 @@ onUnmounted(() => {
                     <div class="sticky-timer" id="live-timer-mobile">—</div>
                 </div>
             </div>
-            <!-- Tek dokunuşla hızlı teklif -->
-            <div v-if="a.quick && a.quick.length" class="sticky-quick-row" data-testid="mobile-quick-row">
-                <button v-for="(q, qi) in a.quick" :key="qi" type="button" class="sticky-quick-chip"
-                        @click="quickBidMobile(q.val)" :data-testid="`mobile-quick-${qi}`">
-                    <span class="sqc-inc">+{{ q.inc_fmt }}</span>
-                    <span class="sqc-val">{{ q.val_fmt }}</span>
+            <!-- Tek dokunuşla hızlı teklif: inputa yazar (otomatik GÖNDERMEZ) -->
+            <div class="sticky-quick-row" data-testid="mobile-quick-row">
+                <button v-for="(qs, qi) in quickSteps" :key="qi" type="button" class="sticky-quick-chip"
+                        @click="quickBidMobile(qs.mult)" :data-testid="`mobile-quick-${qi}`">
+                    {{ qs.label }}
                 </button>
             </div>
             <div class="sticky-input-row">
@@ -532,15 +546,16 @@ onUnmounted(() => {
     .sss-btn { flex: 1; justify-content: center; }
 }
 
-/* Mobil hızlı teklif çipleri */
-.sticky-quick-row { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 2px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+/* Mobil hızlı teklif çipleri (tek satır, kompakt) */
+.sticky-quick-row { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 .sticky-quick-row::-webkit-scrollbar { display: none; }
 .sticky-quick-chip {
-    flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 1px;
-    padding: 8px 14px; border-radius: 12px; border: 1px solid var(--border);
-    background: var(--card); color: var(--text); cursor: pointer; min-height: 46px; line-height: 1.1;
+    flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+    padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 800;
+    border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+    color: var(--primary); cursor: pointer; min-height: 34px; line-height: 1;
+    transition: transform .08s ease, background .15s ease;
 }
-.sticky-quick-chip:active { transform: scale(.96); }
-.sqc-inc { font-size: 13px; font-weight: 800; color: var(--primary); }
-.sqc-val { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.sticky-quick-chip:active { transform: scale(.94); background: color-mix(in srgb, var(--primary) 22%, transparent); }
 </style>
